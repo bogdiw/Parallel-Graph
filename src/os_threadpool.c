@@ -38,7 +38,17 @@ void enqueue_task(os_threadpool_t *tp, os_task_t *t)
 	assert(tp != NULL);
 	assert(t != NULL);
 
-	/* TODO: Enqueue task to the shared task queue. Use synchronization. */
+	// lock the mutex
+	pthread_mutex_lock(&tp->mutex);
+
+	// add the task to the queue
+	list_add_tail(&t->list, &tp->head);
+
+	// signal the condition variable
+	pthread_cond_signal(&tp->cond);
+
+	// unlock the mutex
+	pthread_mutex_unlock(&tp->mutex);
 }
 
 /*
@@ -61,8 +71,22 @@ os_task_t *dequeue_task(os_threadpool_t *tp)
 {
 	os_task_t *t;
 
-	/* TODO: Dequeue task from the shared task queue. Use synchronization. */
-	return NULL;
+	// lock the mutex
+	pthread_mutex_lock(&tp->mutex);
+
+	// wait for a signal 
+	while (queue_is_empty(&tp->head)) {
+		pthread_cond_wait(&tp->cond, &tp->mutex);
+	}
+
+	// get the task from the queue
+	t = list_entry(tp->head.next, os_task_t, list);
+	list_del(tp->head.next);
+
+	// unlock the mutex
+	pthread_mutex_unlock(&tp->mutex);
+
+	return t;
 }
 
 /* Loop function for threads */
@@ -86,7 +110,22 @@ static void *thread_loop_function(void *arg)
 /* Wait completion of all threads. This is to be called by the main thread. */
 void wait_for_completion(os_threadpool_t *tp)
 {
-	/* TODO: Wait for all worker threads. Use synchronization. */
+	// lock the mutex
+	pthread_mutex_lock(&tp->mutex);
+
+	if (queue_is_empty(tp)) {
+		// unlock the mutex
+		pthread_mutex_unlock(&tp->mutex);
+		return;
+	}
+
+	// wait for a signal
+	while (!queue_is_empty(tp)) {
+		pthread_cond_wait(&tp->cond, &tp->mutex);
+	}
+
+	// unlock the mutex
+	pthread_mutex_unlock(&tp->mutex);
 
 	/* Join all worker threads. */
 	for (unsigned int i = 0; i < tp->num_threads; i++)
@@ -106,6 +145,9 @@ os_threadpool_t *create_threadpool(unsigned int num_threads)
 
 	/* TODO: Initialize synchronization data. */
 
+	rc = pthread_mutex_init(&tp->mutex, NULL);
+	rc = pthread_cond_init(&tp->cond, NULL);
+
 	tp->num_threads = num_threads;
 	tp->threads = malloc(num_threads * sizeof(*tp->threads));
 	DIE(tp->threads == NULL, "malloc");
@@ -124,6 +166,9 @@ void destroy_threadpool(os_threadpool_t *tp)
 
 	/* TODO: Cleanup synchronization data. */
 
+	pthread_mutex_destroy(&tp->mutex);
+	pthread_cond_destroy(&tp->cond);
+	
 	list_for_each_safe(n, p, &tp->head) {
 		list_del(n);
 		destroy_task(list_entry(n, os_task_t, list));
