@@ -71,6 +71,10 @@ os_task_t *dequeue_task(os_threadpool_t *tp)
 
 	pthread_mutex_lock(&tp->mutex);
 
+	// wait if the queue is empty and there are still threads running
+	while (queue_is_empty(tp) && tp->waiting_threads < tp->num_threads - 1)
+		pthread_cond_wait(&tp->cond, &tp->mutex);
+
 	// if the queue is empty, decrement waiting_threads and signal the condition variable
 	if (queue_is_empty(tp)) {
 		tp->waiting_threads--;
@@ -116,10 +120,6 @@ static void *thread_loop_function(void *arg)
 void wait_for_completion(os_threadpool_t *tp)
 {
 	pthread_mutex_lock(&tp->mutex);
-
-	// wait if there are still tasks in the queue
-	while (tp->waiting_threads < tp->num_threads - 1)
-		pthread_cond_wait(&tp->cond, &tp->mutex);
 
 	// broadcast to all threads that there are no more tasks
 	pthread_cond_broadcast(&tp->cond);
