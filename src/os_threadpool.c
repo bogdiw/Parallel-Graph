@@ -38,16 +38,16 @@ void enqueue_task(os_threadpool_t *tp, os_task_t *t)
 	assert(tp != NULL);
 	assert(t != NULL);
 
-	// lock the mutex
+	// Lock the mutex
 	pthread_mutex_lock(&tp->mutex);
 
-	// add the task to the queue
-	list_add_tail(&t->list, &tp->head);
+	// Add the task to the queue
+	list_add(&tp->head, &t->list);
 
-	// signal the condition variable
+	// Signal the condition variable
 	pthread_cond_signal(&tp->cond);
 
-	// unlock the mutex
+	// Unlock the mutex
 	pthread_mutex_unlock(&tp->mutex);
 }
 
@@ -71,19 +71,29 @@ os_task_t *dequeue_task(os_threadpool_t *tp)
 {
 	os_task_t *t;
 
-	// lock the mutex
 	pthread_mutex_lock(&tp->mutex);
 
-	// wait for a signal 
-	while (queue_is_empty(&tp->head)) {
-		pthread_cond_wait(&tp->cond, &tp->mutex);
+	if (queue_is_empty(tp)) {
+		// If the queue is empty, decrement waiting_threads and signal the condition variable
+		tp->waiting_threads--;
+		pthread_cond_signal(&tp->cond);
+		pthread_mutex_unlock(&tp->mutex);
+		return NULL;
 	}
 
-	// get the task from the queue
+	// Increment waiting_threads
+	tp->waiting_threads++;
+
+// while (queue_is_empty(tp)) {
+//     pthread_cond_wait(&tp->cond, &tp->mutex);
+// }
+
 	t = list_entry(tp->head.next, os_task_t, list);
 	list_del(tp->head.next);
 
-	// unlock the mutex
+	// Signal the condition variable after removing the task from the queue
+	pthread_cond_signal(&tp->cond);
+
 	pthread_mutex_unlock(&tp->mutex);
 
 	return t;
@@ -110,24 +120,19 @@ static void *thread_loop_function(void *arg)
 /* Wait completion of all threads. This is to be called by the main thread. */
 void wait_for_completion(os_threadpool_t *tp)
 {
-	// lock the mutex
 	pthread_mutex_lock(&tp->mutex);
 
-	if (queue_is_empty(tp)) {
-		// unlock the mutex
-		pthread_mutex_unlock(&tp->mutex);
-		return;
-	}
-
-	// wait for a signal
-	while (!queue_is_empty(tp)) {
+	// Use a while loop instead of an if statement
+	while (tp->waiting_threads < tp->num_threads - 1) {
 		pthread_cond_wait(&tp->cond, &tp->mutex);
 	}
 
-	// unlock the mutex
+	// All threads have incremented waiting_threads; broadcast to wake them up
+	pthread_cond_broadcast(&tp->cond);
+
 	pthread_mutex_unlock(&tp->mutex);
 
-	/* Join all worker threads. */
+	// Join all worker threads.
 	for (unsigned int i = 0; i < tp->num_threads; i++)
 		pthread_join(tp->threads[i], NULL);
 }
@@ -144,9 +149,9 @@ os_threadpool_t *create_threadpool(unsigned int num_threads)
 	list_init(&tp->head);
 
 	/* TODO: Initialize synchronization data. */
-
-	rc = pthread_mutex_init(&tp->mutex, NULL);
-	rc = pthread_cond_init(&tp->cond, NULL);
+	pthread_mutex_init(&tp->mutex, NULL);
+	pthread_cond_init(&tp->cond, NULL);
+	tp->waiting_threads = 0;
 
 	tp->num_threads = num_threads;
 	tp->threads = malloc(num_threads * sizeof(*tp->threads));
@@ -165,10 +170,9 @@ void destroy_threadpool(os_threadpool_t *tp)
 	os_list_node_t *n, *p;
 
 	/* TODO: Cleanup synchronization data. */
-
 	pthread_mutex_destroy(&tp->mutex);
 	pthread_cond_destroy(&tp->cond);
-	
+
 	list_for_each_safe(n, p, &tp->head) {
 		list_del(n);
 		destroy_task(list_entry(n, os_task_t, list));
