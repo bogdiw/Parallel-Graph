@@ -38,7 +38,6 @@ void enqueue_task(os_threadpool_t *tp, os_task_t *t)
 	assert(tp != NULL);
 	assert(t != NULL);
 
-	// Lock the mutex
 	pthread_mutex_lock(&tp->mutex);
 
 	// Add the task to the queue
@@ -47,7 +46,6 @@ void enqueue_task(os_threadpool_t *tp, os_task_t *t)
 	// Signal the condition variable
 	pthread_cond_signal(&tp->cond);
 
-	// Unlock the mutex
 	pthread_mutex_unlock(&tp->mutex);
 }
 
@@ -73,25 +71,22 @@ os_task_t *dequeue_task(os_threadpool_t *tp)
 
 	pthread_mutex_lock(&tp->mutex);
 
+	// if the queue is empty, decrement waiting_threads and signal the condition variable
 	if (queue_is_empty(tp)) {
-		// If the queue is empty, decrement waiting_threads and signal the condition variable
 		tp->waiting_threads--;
 		pthread_cond_signal(&tp->cond);
 		pthread_mutex_unlock(&tp->mutex);
 		return NULL;
 	}
 
-	// Increment waiting_threads
+	// increment waiting_threads
 	tp->waiting_threads++;
 
-// while (queue_is_empty(tp)) {
-//     pthread_cond_wait(&tp->cond, &tp->mutex);
-// }
-
+	// dequeue the task
 	t = list_entry(tp->head.next, os_task_t, list);
 	list_del(tp->head.next);
 
-	// Signal the condition variable after removing the task from the queue
+	// signal the condition variable after removing the task from the queue
 	pthread_cond_signal(&tp->cond);
 
 	pthread_mutex_unlock(&tp->mutex);
@@ -122,11 +117,11 @@ void wait_for_completion(os_threadpool_t *tp)
 {
 	pthread_mutex_lock(&tp->mutex);
 
-	// Use a while loop instead of an if statement
+	// wait if there are still tasks in the queue
 	while (tp->waiting_threads < tp->num_threads - 1)
 		pthread_cond_wait(&tp->cond, &tp->mutex);
 
-	// All threads have incremented waiting_threads; broadcast to wake them up
+	// broadcast to all threads that there are no more tasks
 	pthread_cond_broadcast(&tp->cond);
 
 	pthread_mutex_unlock(&tp->mutex);
@@ -147,7 +142,7 @@ os_threadpool_t *create_threadpool(unsigned int num_threads)
 
 	list_init(&tp->head);
 
-	/* TODO: Initialize synchronization data. */
+	// initialize synchronization data
 	pthread_mutex_init(&tp->mutex, NULL);
 	pthread_cond_init(&tp->cond, NULL);
 	tp->waiting_threads = 0;
@@ -168,7 +163,7 @@ void destroy_threadpool(os_threadpool_t *tp)
 {
 	os_list_node_t *n, *p;
 
-	/* TODO: Cleanup synchronization data. */
+	// destroy synchronization data
 	pthread_mutex_destroy(&tp->mutex);
 	pthread_cond_destroy(&tp->cond);
 

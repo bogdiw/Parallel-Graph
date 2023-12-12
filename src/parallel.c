@@ -36,21 +36,15 @@ static void process_node_helper(void *arg)
 	sum += node->info;
 	pthread_mutex_unlock(&mutex);
 
-	// printf("Sum is now: %d\n", sum);
-
-	// printf("Processing node %d\n", node->id);
-
 	for (unsigned int i = 0; i < node->num_neighbours; i++) {
 		pthread_mutex_lock(&mutex);
 		unsigned int neighbour_idx = node->neighbours[i];
 
 		if (graph->visited[neighbour_idx] == NOT_VISITED) {
-			// printf("Enqueueing task for neighbour %d\n", neighbour_idx);
 			process_node(neighbour_idx);
 		}
 		pthread_mutex_unlock(&mutex);
 	}
-	// printf("Finished processing node %d\n", node->id);
 
 	pthread_mutex_lock(&mutex);
 	graph->visited[idx] = DONE;
