@@ -29,7 +29,6 @@ typedef struct os_threadpool {
 	pthread_mutex_t mutex;
 	pthread_cond_t cond;
 	unsigned int waiting_threads;
-	unsigned int stop_threads;
 	/* TODO: Define threapool / queue synchronization data. */
 } os_threadpool_t;
 

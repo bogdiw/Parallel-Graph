@@ -123,9 +123,8 @@ void wait_for_completion(os_threadpool_t *tp)
 	pthread_mutex_lock(&tp->mutex);
 
 	// Use a while loop instead of an if statement
-	while (tp->waiting_threads < tp->num_threads - 1) {
+	while (tp->waiting_threads < tp->num_threads - 1)
 		pthread_cond_wait(&tp->cond, &tp->mutex);
-	}
 
 	// All threads have incremented waiting_threads; broadcast to wake them up
 	pthread_cond_broadcast(&tp->cond);
