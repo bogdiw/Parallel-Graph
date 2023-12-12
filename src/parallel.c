@@ -15,8 +15,7 @@ static os_graph_t *graph;
 static os_threadpool_t *tp;
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
-typedef struct
-{
+typedef struct {
 	unsigned int idx;
 } graph_task_arg_t;
 
