@@ -40,9 +40,9 @@ static void process_node_helper(void *arg)
 		pthread_mutex_lock(&mutex);
 		unsigned int neighbour_idx = node->neighbours[i];
 
-		if (graph->visited[neighbour_idx] == NOT_VISITED) {
+		if (graph->visited[neighbour_idx] == NOT_VISITED)
 			process_node(neighbour_idx);
-		}
+
 		pthread_mutex_unlock(&mutex);
 	}
 
